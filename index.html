@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Gold Rate" />
+  <meta name="theme-color" content="#0e0a02" />
+  <title>Gold Rate India</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --gold: #f5c842;
+      --gold-light: #ffe680;
+      --gold-dark: #c8951a;
+      --bg: #0e0a02;
+      --card: #1c1507;
+      --card2: #221b08;
+      --border: #3a2e0a;
+      --text: #f5f0e0;
+      --muted: #8a7a4a;
+      --green: #4caf80;
+      --red: #e05555;
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding-top: env(safe-area-inset-top, 20px);
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .gold-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold), var(--gold-light));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 2px 12px rgba(245,200,66,0.4);
+    }
+    .header-title { font-size: 17px; font-weight: 700; color: var(--gold-light); letter-spacing: 0.3px; }
+    .header-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    .refresh-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--gold); border-radius: 20px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 5px;
+      transition: background 0.2s;
+      -webkit-appearance: none;
+    }
+    .refresh-btn:active { background: rgba(245,200,66,0.1); }
+    .refresh-btn.loading #spinIcon { animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scrollable content ── */
+    .scroll-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 24px; }
+
+    /* ── Install banner ── */
+    .install-banner {
+      margin: 12px 16px 0;
+      background: rgba(245,200,66,0.06);
+      border: 1px solid rgba(245,200,66,0.18);
+      border-radius: 14px;
+      padding: 11px 14px;
+      display: none;
+    }
+    .install-banner.show { display: block; }
+    .install-banner-title { font-size: 13px; font-weight: 700; color: var(--gold); margin-bottom: 3px; }
+    .install-banner-text { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .install-banner-text b { color: var(--text); }
+
+    /* ── Purity tabs ── */
+    .purity-wrap { text-align: center; padding: 14px 20px 8px; }
+    .purity-tabs {
+      display: inline-flex; background: var(--card);
+      border-radius: 22px; padding: 3px; border: 1px solid var(--border);
+    }
+    .purity-tab {
+      padding: 6px 22px; border-radius: 18px;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .purity-tab.active {
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      color: #1a1008;
+      box-shadow: 0 2px 8px rgba(245,200,66,0.3);
+    }
+
+    /* ── Main hero card (10g) ── */
+    .main-card {
+      margin: 12px 16px 0;
+      background: linear-gradient(145deg, #221b08, #1a1407);
+      border: 1px solid var(--border);
+      border-radius: 20px; padding: 20px 22px;
+      position: relative; overflow: hidden;
+    }
+    .main-card::before {
+      content: ''; position: absolute; top: -40px; right: -40px;
+      width: 150px; height: 150px;
+      background: radial-gradient(circle, rgba(245,200,66,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .main-card-label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+    .main-price {
+      font-size: 46px; font-weight: 800; color: var(--gold-light);
+      line-height: 1; letter-spacing: -1.5px; font-variant-numeric: tabular-nums;
+    }
+    .main-price .cur { font-size: 24px; font-weight: 600; color: var(--gold); vertical-align: super; margin-right: 1px; }
+    .per-gram { font-size: 14px; color: var(--muted); margin-top: 5px; }
+
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 700; margin-top: 10px;
+    }
+    .live-pill.live { background: rgba(76,175,128,0.15); color: var(--green); }
+    .live-pill.cached { background: rgba(138,122,74,0.15); color: var(--muted); }
+    .live-pill.loading { background: rgba(245,200,66,0.1); color: var(--gold); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .dot.pulse { animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    /* ── Grid cards (100g + 1g) ── */
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 16px 0; }
+    .price-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 15px; position: relative; overflow: hidden;
+    }
+    .price-card.highlight {
+      background: linear-gradient(145deg, #2a1f05, #1f1804);
+      border-color: rgba(245,200,66,0.25);
+    }
+    .pc-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
+    .pc-value { font-size: 22px; font-weight: 800; color: var(--gold-light); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+    .pc-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .pc-icon { position: absolute; top: 12px; right: 12px; font-size: 22px; opacity: 0.2; }
+
+    /* ── Widget section ── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 20px 8px;
+    }
+    .section-title { font-size: 11px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; color: var(--muted); }
+
+    /* ── Live widget card ── */
+    .widget-card {
+      margin: 0 16px;
+      background: linear-gradient(135deg, #1f1907, #160f02);
+      border: 1px solid rgba(245,200,66,0.2);
+      border-radius: 20px; padding: 16px 18px;
+      position: relative; overflow: hidden;
+    }
+    .widget-card::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 60%, rgba(245,200,66,0.04));
+      pointer-events: none;
+    }
+    .widget-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .widget-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+    .widget-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px;
+      background: rgba(76,175,128,0.15); color: var(--green);
+      border-radius: 8px; letter-spacing: 0.5px;
+    }
+    .widget-badge.stale { background: rgba(138,122,74,0.15); color: var(--muted); }
+    .widget-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .widget-price-block { }
+    .wp-label { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+    .wp-value { font-size: 20px; font-weight: 800; color: var(--gold-light); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+    .wp-sub { font-size: 10px; color: var(--muted); }
+    .widget-divider { height: 1px; background: var(--border); margin-bottom: 10px; }
+    .widget-meta { display: flex; align-items: center; justify-content: space-between; }
+    .widget-time { font-size: 10px; color: var(--muted); }
+    .widget-source { font-size: 10px; color: var(--muted); }
+    .widget-countdown { font-size: 10px; color: var(--gold); font-weight: 600; }
+
+    /* Auto-refresh progress bar */
+    .progress-bar-wrap { height: 2px; background: var(--border); border-radius: 1px; margin-top: 10px; overflow: hidden; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, var(--gold-dark), var(--gold)); border-radius: 1px; width: 100%; transition: width 1s linear; }
+
+    /* ── All denominations table ── */
+    .rates-table {
+      margin: 0 16px; background: var(--card);
+      border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    }
+    .rate-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px; border-bottom: 1px solid var(--border);
+    }
+    .rate-row:last-child { border-bottom: none; }
+    .rate-row-label { font-size: 14px; color: var(--text); font-weight: 500; }
+    .rate-row-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .rate-row-price { font-size: 16px; font-weight: 700; color: var(--gold-light); font-variant-numeric: tabular-nums; }
+
+    /* ── Info strip ── */
+    .info-strip {
+      margin: 12px 16px 0;
+      background: rgba(245,200,66,0.04); border: 1px solid rgba(245,200,66,0.10);
+      border-radius: 12px; padding: 10px 14px;
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .info-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .info-text { font-size: 11px; color: var(--muted); line-height: 1.55; }
+
+    /* ── Footer ── */
+    .footer { text-align: center; font-size: 11px; color: var(--muted); padding: 16px 20px 4px; }
+
+    /* ── Error banner ── */
+    .error-banner {
+      margin: 10px 16px 0;
+      background: rgba(224,85,85,0.08); border: 1px solid rgba(224,85,85,0.2);
+      border-radius: 12px; padding: 10px 14px;
+      font-size: 12px; color: var(--red); display: none;
+    }
+    .error-banner.show { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="gold-icon">⚜️</div>
+      <div>
+        <div class="header-title">Gold Rate India</div>
+        <div class="header-sub" id="headerSub">IBJA · 24 Karat · INR</div>
+      </div>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="fetchGoldPrice()">
+      <span id="spinIcon">↻</span> Refresh
+    </button>
+  </div>
+
+  <!-- Scrollable body -->
+  <div class="scroll-body">
+
+    <!-- Install banner (shown only in browser, not standalone) -->
+    <div class="install-banner" id="installBanner">
+      <div class="install-banner-title">📌 Add to Home Screen</div>
+      <div class="install-banner-text">Tap <b>Share ⬆</b> → <b>Add to Home Screen</b> for app-like access with auto-refresh.</div>
+    </div>
+
+    <!-- Purity switch -->
+    <div class="purity-wrap">
+      <div class="purity-tabs">
+        <div class="purity-tab active" id="tab24k" onclick="switchPurity('24k')">24K (999)</div>
+        <div class="purity-tab" id="tab22k" onclick="switchPurity('22k')">22K (916)</div>
+      </div>
+    </div>
+
+    <!-- Hero: 10g price -->
+    <div class="main-card">
+      <div class="main-card-label">10 Grams · 24K Gold</div>
+      <div class="main-price"><span class="cur">₹</span><span id="hero10g">—</span></div>
+      <div class="per-gram" id="heroPerGram">per gram: ₹—</div>
+      <div class="live-pill loading" id="livePill">
+        <span class="dot pulse"></span>
+        <span id="pillText">Fetching…</span>
+      </div>
+    </div>
+
+    <!-- Grid: 100g and 1g -->
+    <div class="grid">
+      <div class="price-card highlight">
+        <div class="pc-icon">📦</div>
+        <div class="pc-label">100 Grams</div>
+        <div class="pc-value" id="card100g">₹—</div>
+        <div class="pc-sub">24K Pure Gold</div>
+      </div>
+      <div class="price-card">
+        <div class="pc-icon">⚖️</div>
+        <div class="pc-label">1 Gram</div>
+        <div class="pc-value" id="card1g">₹—</div>
+        <div class="pc-sub">24K Pure Gold</div>
+      </div>
+    </div>
+
+    <!-- Error banner -->
+    <div class="error-banner" id="errorBanner">⚠ Could not fetch live price. Showing cached rate.</div>
+
+    <!-- ══ LIVE WIDGET ══ -->
+    <div class="section-header">
+      <div class="section-title">Live Widget</div>
+    </div>
+    <div class="widget-card">
+      <div class="widget-row">
+        <div class="widget-label">Gold Rate · India</div>
+        <div class="widget-badge" id="widgetBadge">● LIVE</div>
+      </div>
+      <div class="widget-prices">
+        <div class="widget-price-block">
+          <div class="wp-label">10 Grams</div>
+          <div class="wp-value" id="w10g">₹—</div>
+          <div class="wp-sub">24K · 999</div>
+        </div>
+        <div class="widget-price-block">
+          <div class="wp-label">100 Grams</div>
+          <div class="wp-value" id="w100g">₹—</div>
+          <div class="wp-sub">24K · 999</div>
+        </div>
+      </div>
+      <div class="widget-divider"></div>
+      <div class="widget-meta">
+        <div class="widget-time" id="widgetTime">—</div>
+        <div class="widget-countdown" id="widgetCountdown"></div>
+        <div class="widget-source">IBJA</div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+
+    <!-- All Denominations -->
+    <div class="section-header">
+      <div class="section-title">All Denominations</div>
+    </div>
+    <div class="rates-table">
+      <div class="rate-row">
+        <div><div class="rate-row-label">1 Gram</div><div class="rate-row-sub">24K 999 purity</div></div>
+        <div class="rate-row-price" id="t1g">₹—</div>
+      </div>
+      <div class="rate-row">
+        <div><div class="rate-row-label">8 Grams</div><div class="rate-row-sub">1 Tola</div></div>
+        <div class="rate-row-price" id="t8g">₹—</div>
+      </div>
+      <div class="rate-row">
+        <div><div class="rate-row-label">10 Grams</div><div class="rate-row-sub">Most common unit</div></div>
+        <div class="rate-row-price" id="t10g">₹—</div>
+      </div>
+      <div class="rate-row">
+        <div><div class="rate-row-label">100 Grams</div><div class="rate-row-sub">Investment grade</div></div>
+        <div class="rate-row-price" id="t100g">₹—</div>
+      </div>
+      <div class="rate-row">
+        <div><div class="rate-row-label">1 Kilogram</div><div class="rate-row-sub">Bullion bar</div></div>
+        <div class="rate-row-price" id="t1kg">₹—</div>
+      </div>
+    </div>
+
+    <!-- Info strip -->
+    <div class="info-strip">
+      <div class="info-icon">ℹ️</div>
+      <div class="info-text">Prices from IBJA (India Bullion &amp; Jewellers Association) — official Indian benchmark used by RBI for Sovereign Gold Bonds. Excludes making charges and city-level variation.</div>
+    </div>
+
+    <div class="footer" id="lastUpdated">Last updated: —</div>
+
+  </div><!-- end scroll-body -->
+
+  <script>
+    // ── Config ────────────────────────────────────────────────────────────────
+    const REFRESH_MS   = 30 * 60 * 1000;  // auto-refresh every 30 min
+    const WIDGET_TICK  = 1000;             // countdown ticks every 1s
+    const IBJA_PROXY   = 'https://api.codetabs.com/v1/proxy?quest=https://www.ibjarates.com';
+    const PURITY_MULT  = { '24k': 1.0, '22k': 22 / 24 };
+
+    let currentPurity  = '24k';
+    let lastData       = null;   // { perGramINR, ts, isLive }
+    let nextRefreshAt  = 0;
+    let countdownTimer = null;
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function fmt(n) {
+      if (!n || isNaN(n)) return '—';
+      return Math.round(n).toLocaleString('en-IN');
+    }
+
+    // ── Cache (localStorage) ──────────────────────────────────────────────────
+    function saveCache(perGramINR) {
+      try { localStorage.setItem('gt_v2', JSON.stringify({ perGramINR, ts: Date.now() })); } catch (_) {}
+    }
+    function loadCache() {
+      try { const s = localStorage.getItem('gt_v2'); return s ? JSON.parse(s) : null; } catch (_) { return null; }
+    }
+
+    // ── Fetch IBJA via CORS proxy ─────────────────────────────────────────────
+    async function fetchFromIBJA() {
+      const r = await fetch(IBJA_PROXY, { signal: AbortSignal.timeout(15000) });
+      if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+      const html = await r.text();
+      const matches = [...html.matchAll(/data-label="Gold 999"[^>]*>(\d+)</g)];
+      if (!matches.length) throw new Error('Gold 999 not found in IBJA page');
+      const per10g = parseInt(matches[0][1], 10);
+      if (per10g < 50000 || per10g > 1000000) throw new Error('Implausible value: ' + per10g);
+      return per10g / 10; // per gram
+    }
+
+    // ── Main fetch ────────────────────────────────────────────────────────────
+    async function fetchGoldPrice() {
+      setLoading(true);
+      hideError();
+
+      try {
+        const perGramINR = await fetchFromIBJA();
+        saveCache(perGramINR);
+        lastData = { perGramINR, ts: Date.now(), isLive: true };
+        renderAll(true);
+        scheduleNextRefresh();
+      } catch (err) {
+        const cache = loadCache();
+        if (cache) {
+          lastData = { ...cache, isLive: false };
+          renderAll(false);
+          showError();
+        } else {
+          renderAll(false);
+          showError();
+        }
+        scheduleNextRefresh();
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    function renderAll(isLive) {
+      if (!lastData?.perGramINR) return;
+      const pg = lastData.perGramINR * PURITY_MULT[currentPurity];
+
+      // Hero
+      document.getElementById('hero10g').textContent    = fmt(pg * 10);
+      document.getElementById('heroPerGram').textContent = 'per gram: ₹' + fmt(pg);
+
+      // Grid cards
+      document.getElementById('card100g').textContent = '₹' + fmt(pg * 100);
+      document.getElementById('card1g').textContent   = '₹' + fmt(pg);
+
+      // Widget (always shows 24K base)
+      const pg24 = lastData.perGramINR;
+      document.getElementById('w10g').textContent  = '₹' + fmt(pg24 * 10);
+      document.getElementById('w100g').textContent = '₹' + fmt(pg24 * 100);
+
+      // Table
+      document.getElementById('t1g').textContent   = '₹' + fmt(pg);
+      document.getElementById('t8g').textContent   = '₹' + fmt(pg * 8);
+      document.getElementById('t10g').textContent  = '₹' + fmt(pg * 10);
+      document.getElementById('t100g').textContent = '₹' + fmt(pg * 100);
+      document.getElementById('t1kg').textContent  = '₹' + fmt(pg * 1000);
+
+      // Live pill
+      const pill = document.getElementById('livePill');
+      const dot  = pill.querySelector('.dot');
+      pill.className = 'live-pill ' + (isLive ? 'live' : 'cached');
+      dot.className  = 'dot' + (isLive ? ' pulse' : '');
+      document.getElementById('pillText').textContent = isLive ? 'IBJA Live' : 'Cached';
+
+      // Widget badge
+      const badge = document.getElementById('widgetBadge');
+      badge.className = 'widget-badge' + (isLive ? '' : ' stale');
+      badge.textContent = isLive ? '● LIVE' : '◌ CACHED';
+
+      // Timestamps
+      const t = new Date(lastData.ts);
+      const timeStr = t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('widgetTime').textContent = timeStr + ' IST';
+      document.getElementById('lastUpdated').textContent = 'Last updated: ' + timeStr + ' IST' + (isLive ? '' : ' (cached)');
+    }
+
+    // ── Purity switch ─────────────────────────────────────────────────────────
+    function switchPurity(p) {
+      currentPurity = p;
+      document.getElementById('tab24k').classList.toggle('active', p === '24k');
+      document.getElementById('tab22k').classList.toggle('active', p === '22k');
+
+      // Update purity label on hero card
+      document.querySelector('.main-card-label').textContent =
+        (p === '24k' ? '10 Grams · 24K Gold' : '10 Grams · 22K Gold');
+
+      if (lastData) renderAll(lastData.isLive);
+    }
+
+    // ── Auto-refresh + countdown widget ──────────────────────────────────────
+    function scheduleNextRefresh() {
+      nextRefreshAt = Date.now() + REFRESH_MS;
+      clearInterval(countdownTimer);
+      countdownTimer = setInterval(tickCountdown, WIDGET_TICK);
+    }
+
+    function tickCountdown() {
+      const remaining = Math.max(0, nextRefreshAt - Date.now());
+      if (remaining === 0) {
+        clearInterval(countdownTimer);
+        fetchGoldPrice();
+        return;
+      }
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
+      document.getElementById('widgetCountdown').textContent =
+        'Next: ' + m + ':' + String(s).padStart(2, '0');
+
+      // Shrink progress bar as time passes
+      const pct = (remaining / REFRESH_MS) * 100;
+      document.getElementById('progressBar').style.width = pct + '%';
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────────────────
+    function setLoading(on) {
+      document.getElementById('refreshBtn').classList.toggle('loading', on);
+      if (on) {
+        document.getElementById('livePill').className = 'live-pill loading';
+        document.getElementById('livePill').querySelector('.dot').className = 'dot pulse';
+        document.getElementById('pillText').textContent = 'Fetching…';
+        document.getElementById('widgetCountdown').textContent = 'Refreshing…';
+      }
+    }
+    function showError() { document.getElementById('errorBanner').classList.add('show'); }
+    function hideError() { document.getElementById('errorBanner').classList.remove('show'); }
+
+    // ── Install banner ────────────────────────────────────────────────────────
+    function checkInstall() {
+      const standalone = window.navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches;
+      if (!standalone) document.getElementById('installBanner').classList.add('show');
+    }
+
+    // ── Service Worker ────────────────────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    checkInstall();
+
+    // Show cached price immediately while fetching
+    const cached = loadCache();
+    if (cached) {
+      lastData = { ...cached, isLive: false };
+      renderAll(false);
+    }
+
+    fetchGoldPrice();
+  </script>
+</body>
+</html>
