@@ -1,7 +1,7 @@
 // Service Worker — GoldTicker
 // Caches app shell for offline use; network-first for API calls
 
-const CACHE = 'goldticker-v1';
+const CACHE = 'goldticker-v2';
 const SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
