@@ -278,7 +278,7 @@
       <div class="gold-icon">⚜️</div>
       <div>
         <div class="header-title">Gold Rate India</div>
-        <div class="header-sub" id="headerSub">Yahoo Finance · 24 Karat · INR</div>
+        <div class="header-sub" id="headerSub">Live Rate · 24 Karat · INR</div>
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -365,7 +365,7 @@
       <div class="widget-meta">
         <div class="widget-time" id="widgetTime">—</div>
         <div class="widget-countdown" id="widgetCountdown"></div>
-        <div class="widget-source">Yahoo Finance</div>
+        <div class="widget-source">currency-api</div>
       </div>
       <div class="progress-bar-wrap">
         <div class="progress-bar" id="progressBar"></div>
@@ -402,7 +402,7 @@
     <!-- Info strip -->
     <div class="info-strip">
       <div class="info-icon">ℹ️</div>
-      <div class="info-text">Prices sourced from Yahoo Finance (XAU/USD × USD/INR). Reflects international spot price converted to INR. Excludes making charges and city-level variation.</div>
+      <div class="info-text">Prices sourced from fawazahmed0/currency-api (XAU→INR spot rate + India import duty &amp; GST). Excludes making charges and city-level variation.</div>
     </div>
 
     <div class="footer" id="lastUpdated">Last updated: —</div>
@@ -411,12 +411,12 @@
 
   <script>
     // ── Config ────────────────────────────────────────────────────────────────
-    const REFRESH_MS   = 30 * 60 * 1000;  // auto-refresh every 30 min
-    const WIDGET_TICK  = 1000;             // countdown ticks every 1s
-    const YF_GOLD      = 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d';
-    const YF_USDINR    = 'https://query1.finance.yahoo.com/v8/finance/chart/USDINR%3DX?interval=1d&range=1d';
+    const REFRESH_MS   = 30 * 60 * 1000;
+    const WIDGET_TICK  = 1000;
     const TROY_OZ_G    = 31.1035;
-    const INDIA_LEVY   = 1.1237; // import duty ~6% + GST 3% + other levies
+    const INDIA_LEVY   = 1.1237; // import duty ~6% + GST 3% + levies
+    const XAU_API_1    = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json';
+    const XAU_API_2    = 'https://latest.currency-api.pages.dev/v1/currencies/xau.json';
     const PURITY_MULT  = { '24k': 1.0, '22k': 22 / 24 };
 
     let currentPurity  = '24k';
@@ -438,20 +438,15 @@
       try { const s = localStorage.getItem('gt_v2'); return s ? JSON.parse(s) : null; } catch (_) { return null; }
     }
 
-    // ── Fetch gold price via Yahoo Finance (no API key needed) ───────────────
-    async function fetchFromYahoo() {
-      const [goldRes, fxRes] = await Promise.all([
-        fetch(YF_GOLD,   { signal: AbortSignal.timeout(15000) }),
-        fetch(YF_USDINR, { signal: AbortSignal.timeout(15000) })
-      ]);
-      if (!goldRes.ok) throw new Error('Yahoo gold HTTP ' + goldRes.status);
-      if (!fxRes.ok)   throw new Error('Yahoo FX HTTP '   + fxRes.status);
-      const goldData = await goldRes.json();
-      const fxData   = await fxRes.json();
-      const xauUsd   = goldData.chart.result[0].meta.regularMarketPrice;
-      const usdInr   = fxData.chart.result[0].meta.regularMarketPrice;
-      if (!xauUsd || !usdInr) throw new Error('Missing price data');
-      const perGramINR = (xauUsd * usdInr) / TROY_OZ_G * INDIA_LEVY;
+    // ── Fetch XAU→INR (CORS-open, no API key, jsDelivr CDN) ─────────────────
+    async function fetchFromCurrencyAPI() {
+      let res = await fetch(XAU_API_1, { signal: AbortSignal.timeout(12000) }).catch(() => null);
+      if (!res || !res.ok) res = await fetch(XAU_API_2, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) throw new Error('Currency API HTTP ' + res.status);
+      const data = await res.json();
+      const xauInr = data.xau && data.xau.inr;
+      if (!xauInr) throw new Error('INR rate missing in response');
+      const perGramINR = (xauInr / TROY_OZ_G) * INDIA_LEVY;
       if (perGramINR < 5000 || perGramINR > 150000) throw new Error('Implausible value: ' + perGramINR);
       return perGramINR;
     }
@@ -462,7 +457,7 @@
       hideError();
 
       try {
-        const perGramINR = await fetchFromYahoo();
+        const perGramINR = await fetchFromCurrencyAPI();
         saveCache(perGramINR);
         lastData = { perGramINR, ts: Date.now(), isLive: true };
         renderAll(true);
