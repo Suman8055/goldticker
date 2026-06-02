@@ -1,6 +1,4 @@
 // Service Worker — GoldTicker
-// Caches app shell for offline use; network-first for API calls
-
 const CACHE = 'goldticker-v2';
 const SHELL = ['/', '/index.html', '/manifest.json'];
 
@@ -18,16 +16,18 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Network-first for external API calls
   if (!url.origin.includes(self.location.origin)) {
     e.respondWith(fetch(e.request).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' } })));
     return;
   }
 
-  // Cache-first for app shell
   e.respondWith(
     caches.match(e.request).then(cached =>
       cached || fetch(e.request).then(res => {
