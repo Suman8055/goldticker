@@ -365,7 +365,7 @@
       <div class="widget-meta">
         <div class="widget-time" id="widgetTime">—</div>
         <div class="widget-countdown" id="widgetCountdown"></div>
-        <div class="widget-source">currency-api</div>
+        <div class="widget-source" id="dataSource">MCX</div>
       </div>
       <div class="progress-bar-wrap">
         <div class="progress-bar" id="progressBar"></div>
@@ -402,7 +402,7 @@
     <!-- Info strip -->
     <div class="info-strip">
       <div class="info-icon">ℹ️</div>
-      <div class="info-text">Prices sourced from fawazahmed0/currency-api (XAU→INR spot rate + India import duty &amp; GST). Excludes making charges and city-level variation.</div>
+      <div class="info-text">Prices sourced from MCX (Multi Commodity Exchange of India) via Economic Times live feed — official Indian gold futures, updated intraday. Fallback: fawazahmed0/currency-api (daily). Excludes making charges and city-level variation.</div>
     </div>
 
     <div class="footer" id="lastUpdated">Last updated: —</div>
@@ -411,10 +411,11 @@
 
   <script>
     // ── Config ────────────────────────────────────────────────────────────────
-    const REFRESH_MS   = 30 * 60 * 1000;
+    const REFRESH_MS   = 15 * 60 * 1000; // 15 min — MCX updates intraday
     const WIDGET_TICK  = 1000;
     const TROY_OZ_G    = 31.1035;
-    const INDIA_LEVY   = 1.1237; // import duty ~6% + GST 3% + levies
+    const INDIA_LEVY   = 1.1237;
+    const MCX_BASE     = 'https://mcxlivefeeds.indiatimes.com/ET_MCX/mcxjson';
     const XAU_API_1    = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json';
     const XAU_API_2    = 'https://latest.currency-api.pages.dev/v1/currencies/xau.json';
     const PURITY_MULT  = { '24k': 1.0, '22k': 22 / 24 };
@@ -438,17 +439,50 @@
       try { const s = localStorage.getItem('gt_v2'); return s ? JSON.parse(s) : null; } catch (_) { return null; }
     }
 
-    // ── Fetch XAU→INR (CORS-open, no API key, jsDelivr CDN) ─────────────────
+    // ── Tier 1: MCX live feed via Economic Times (CORS-open, intraday) ───────
+    async function fetchFromMCX() {
+      // Get nearest expiry — MCX GOLD contracts roll monthly
+      const today = new Date();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = '05'; // MCX GOLD expires on 5th of each month
+      let year = today.getFullYear();
+      let month = today.getMonth() + 1;
+      // If today is past the 5th, use next month
+      if (today.getDate() > 5) { month++; if (month > 12) { month = 1; year++; } }
+      const expiry = `${year}-${String(month).padStart(2, '0')}-${dd}`;
+
+      const cb = 'gt' + Date.now();
+      const url = `${MCX_BASE}?callback=${cb}&symbol=GOLD&expiry=${expiry}&type=fando&language=&_=${Date.now()}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) throw new Error('MCX HTTP ' + res.status);
+      const text = await res.text();
+      // Strip JSONP wrapper
+      const json = text.replace(/^[^(]+\(/, '').replace(/\)\s*$/, '');
+      const data = JSON.parse(json);
+      const t = data.NewDataSet.Table;
+      const per10g = parseFloat(t.LastTradedPrice || t.BestSellPrice);
+      if (!per10g || per10g < 50000 || per10g > 1000000) throw new Error('Implausible MCX value: ' + per10g);
+      return {
+        perGramINR: per10g / 10,
+        high: parseFloat(t.HighPrice) / 10,
+        low:  parseFloat(t.LowPrice)  / 10,
+        pct:  parseFloat(t.PercentChange),
+        dt:   t.DateTime,
+        source: 'MCX'
+      };
+    }
+
+    // ── Tier 2: fawazahmed0 currency-api (CORS-open, daily fallback) ─────────
     async function fetchFromCurrencyAPI() {
       let res = await fetch(XAU_API_1, { signal: AbortSignal.timeout(12000) }).catch(() => null);
       if (!res || !res.ok) res = await fetch(XAU_API_2, { signal: AbortSignal.timeout(12000) });
-      if (!res.ok) throw new Error('Currency API HTTP ' + res.status);
+      if (!res || !res.ok) throw new Error('Currency API unavailable');
       const data = await res.json();
       const xauInr = data.xau && data.xau.inr;
-      if (!xauInr) throw new Error('INR rate missing in response');
+      if (!xauInr) throw new Error('INR rate missing');
       const perGramINR = (xauInr / TROY_OZ_G) * INDIA_LEVY;
       if (perGramINR < 5000 || perGramINR > 150000) throw new Error('Implausible value: ' + perGramINR);
-      return perGramINR;
+      return { perGramINR, high: null, low: null, pct: null, dt: null, source: 'currency-api' };
     }
 
     // ── Main fetch ────────────────────────────────────────────────────────────
@@ -457,9 +491,14 @@
       hideError();
 
       try {
-        const perGramINR = await fetchFromCurrencyAPI();
-        saveCache(perGramINR);
-        lastData = { perGramINR, ts: Date.now(), isLive: true };
+        let result;
+        try {
+          result = await fetchFromMCX();
+        } catch (_) {
+          result = await fetchFromCurrencyAPI();
+        }
+        saveCache(result.perGramINR);
+        lastData = { ...result, ts: Date.now(), isLive: true };
         renderAll(true);
         scheduleNextRefresh();
       } catch (err) {
@@ -515,11 +554,12 @@
       badge.className = 'widget-badge' + (isLive ? '' : ' stale');
       badge.textContent = isLive ? '● LIVE' : '◌ CACHED';
 
-      // Timestamps
+      // Timestamps + source
       const t = new Date(lastData.ts);
       const timeStr = t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
       document.getElementById('widgetTime').textContent = timeStr + ' IST';
       document.getElementById('lastUpdated').textContent = 'Last updated: ' + timeStr + ' IST' + (isLive ? '' : ' (cached)');
+      document.getElementById('dataSource').textContent = lastData.source || 'MCX';
     }
 
     // ── Purity switch ─────────────────────────────────────────────────────────
