@@ -76,6 +76,35 @@
     }
     .refresh-btn:active { background: rgba(245,200,66,0.1); }
     .refresh-btn.loading #spinIcon { animation: spin 0.8s linear infinite; display: inline-block; }
+
+    .update-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 20px;
+      padding: 6px 14px; font-size: 12px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 5px;
+      transition: all 0.2s; -webkit-appearance: none;
+    }
+    .update-btn.has-update {
+      border-color: var(--gold); color: var(--gold);
+      background: rgba(245,200,66,0.08);
+      animation: glow 1.8s ease-in-out infinite;
+    }
+    .update-btn.checking #updateIcon { animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes glow { 0%,100%{box-shadow:0 0 0 rgba(245,200,66,0)} 50%{box-shadow:0 0 8px rgba(245,200,66,0.35)} }
+
+    .toast {
+      position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+      left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #2a2010; border: 1px solid var(--border);
+      color: var(--text); border-radius: 14px;
+      padding: 11px 18px; font-size: 13px; font-weight: 600;
+      white-space: nowrap; z-index: 999;
+      transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.35s;
+      opacity: 0; pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.green { border-color: var(--green); color: var(--green); }
+    .toast.gold  { border-color: var(--gold);  color: var(--gold);  }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Scrollable content ── */
@@ -252,10 +281,17 @@
         <div class="header-sub" id="headerSub">Yahoo Finance · 24 Karat · INR</div>
       </div>
     </div>
-    <button class="refresh-btn" id="refreshBtn" onclick="fetchGoldPrice()">
-      <span id="spinIcon">↻</span> Refresh
-    </button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="update-btn" id="updateBtn" onclick="checkForUpdate()">
+        <span id="updateIcon">↓</span> <span id="updateLabel">Update</span>
+      </button>
+      <button class="refresh-btn" id="refreshBtn" onclick="fetchGoldPrice()">
+        <span id="spinIcon">↻</span> Refresh
+      </button>
+    </div>
   </div>
+
+  <div class="toast" id="toast"></div>
 
   <!-- Scrollable body -->
   <div class="scroll-body">
@@ -548,9 +584,87 @@
       if (!standalone) document.getElementById('installBanner').classList.add('show');
     }
 
-    // ── Service Worker ────────────────────────────────────────────────────────
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    let toastTimer = null;
+    function showToast(msg, type = '') {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show' + (type ? ' ' + type : '');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.classList.remove('show'); }, 3000);
+    }
+
+    // ── Service Worker + Update ───────────────────────────────────────────────
+    let swReg = null;
+    let updateWaiting = false;
+
+    async function checkForUpdate() {
+      const btn = document.getElementById('updateBtn');
+      const icon = document.getElementById('updateIcon');
+      const label = document.getElementById('updateLabel');
+
+      if (updateWaiting && swReg && swReg.waiting) {
+        swReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        showToast('⬇ New version downloading…', 'gold');
+        return;
+      }
+
+      btn.classList.add('checking');
+      icon.textContent = '↻';
+      label.textContent = 'Checking…';
+
+      try {
+        if (!swReg) swReg = await navigator.serviceWorker.getRegistration();
+        if (!swReg) throw new Error('no sw');
+        await swReg.update();
+
+        await new Promise(resolve => setTimeout(resolve, 1800));
+
+        if (swReg.waiting) {
+          markUpdateReady();
+          showToast('🆕 New version found! Tap Update to apply.', 'gold');
+        } else {
+          showToast('✓ Already up to date', 'green');
+          btn.classList.remove('has-update');
+          label.textContent = 'Update';
+        }
+      } catch (_) {
+        showToast('Could not check for updates', '');
+        label.textContent = 'Update';
+      }
+
+      btn.classList.remove('checking');
+      icon.textContent = updateWaiting ? '↓' : '↓';
+    }
+
+    function markUpdateReady() {
+      updateWaiting = true;
+      const btn = document.getElementById('updateBtn');
+      btn.classList.add('has-update');
+      document.getElementById('updateIcon').textContent = '↓';
+      document.getElementById('updateLabel').textContent = 'New version!';
+    }
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        swReg = reg;
+
+        if (reg.waiting) markUpdateReady();
+
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              markUpdateReady();
+              showToast('🆕 New version available! Tap Update.', 'gold');
+            }
+          });
+        });
+      }).catch(() => {});
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
     }
 
     // ── Init ──────────────────────────────────────────────────────────────────
