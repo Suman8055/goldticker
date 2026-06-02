@@ -249,7 +249,7 @@
       <div class="gold-icon">⚜️</div>
       <div>
         <div class="header-title">Gold Rate India</div>
-        <div class="header-sub" id="headerSub">IBJA · 24 Karat · INR</div>
+        <div class="header-sub" id="headerSub">Yahoo Finance · 24 Karat · INR</div>
       </div>
     </div>
     <button class="refresh-btn" id="refreshBtn" onclick="fetchGoldPrice()">
@@ -329,7 +329,7 @@
       <div class="widget-meta">
         <div class="widget-time" id="widgetTime">—</div>
         <div class="widget-countdown" id="widgetCountdown"></div>
-        <div class="widget-source">IBJA</div>
+        <div class="widget-source">Yahoo Finance</div>
       </div>
       <div class="progress-bar-wrap">
         <div class="progress-bar" id="progressBar"></div>
@@ -366,7 +366,7 @@
     <!-- Info strip -->
     <div class="info-strip">
       <div class="info-icon">ℹ️</div>
-      <div class="info-text">Prices from IBJA (India Bullion &amp; Jewellers Association) — official Indian benchmark used by RBI for Sovereign Gold Bonds. Excludes making charges and city-level variation.</div>
+      <div class="info-text">Prices sourced from Yahoo Finance (XAU/USD × USD/INR). Reflects international spot price converted to INR. Excludes making charges and city-level variation.</div>
     </div>
 
     <div class="footer" id="lastUpdated">Last updated: —</div>
@@ -377,7 +377,10 @@
     // ── Config ────────────────────────────────────────────────────────────────
     const REFRESH_MS   = 30 * 60 * 1000;  // auto-refresh every 30 min
     const WIDGET_TICK  = 1000;             // countdown ticks every 1s
-    const IBJA_PROXY   = 'https://api.codetabs.com/v1/proxy?quest=https://www.ibjarates.com';
+    const YF_GOLD      = 'https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d';
+    const YF_USDINR    = 'https://query1.finance.yahoo.com/v8/finance/chart/USDINR%3DX?interval=1d&range=1d';
+    const TROY_OZ_G    = 31.1035;
+    const INDIA_LEVY   = 1.1237; // import duty ~6% + GST 3% + other levies
     const PURITY_MULT  = { '24k': 1.0, '22k': 22 / 24 };
 
     let currentPurity  = '24k';
@@ -399,16 +402,22 @@
       try { const s = localStorage.getItem('gt_v2'); return s ? JSON.parse(s) : null; } catch (_) { return null; }
     }
 
-    // ── Fetch IBJA via CORS proxy ─────────────────────────────────────────────
-    async function fetchFromIBJA() {
-      const r = await fetch(IBJA_PROXY, { signal: AbortSignal.timeout(15000) });
-      if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
-      const html = await r.text();
-      const matches = [...html.matchAll(/data-label="Gold 999"[^>]*>(\d+)</g)];
-      if (!matches.length) throw new Error('Gold 999 not found in IBJA page');
-      const per10g = parseInt(matches[0][1], 10);
-      if (per10g < 50000 || per10g > 1000000) throw new Error('Implausible value: ' + per10g);
-      return per10g / 10; // per gram
+    // ── Fetch gold price via Yahoo Finance (no API key needed) ───────────────
+    async function fetchFromYahoo() {
+      const [goldRes, fxRes] = await Promise.all([
+        fetch(YF_GOLD,   { signal: AbortSignal.timeout(15000) }),
+        fetch(YF_USDINR, { signal: AbortSignal.timeout(15000) })
+      ]);
+      if (!goldRes.ok) throw new Error('Yahoo gold HTTP ' + goldRes.status);
+      if (!fxRes.ok)   throw new Error('Yahoo FX HTTP '   + fxRes.status);
+      const goldData = await goldRes.json();
+      const fxData   = await fxRes.json();
+      const xauUsd   = goldData.chart.result[0].meta.regularMarketPrice;
+      const usdInr   = fxData.chart.result[0].meta.regularMarketPrice;
+      if (!xauUsd || !usdInr) throw new Error('Missing price data');
+      const perGramINR = (xauUsd * usdInr) / TROY_OZ_G * INDIA_LEVY;
+      if (perGramINR < 5000 || perGramINR > 150000) throw new Error('Implausible value: ' + perGramINR);
+      return perGramINR;
     }
 
     // ── Main fetch ────────────────────────────────────────────────────────────
@@ -417,7 +426,7 @@
       hideError();
 
       try {
-        const perGramINR = await fetchFromIBJA();
+        const perGramINR = await fetchFromYahoo();
         saveCache(perGramINR);
         lastData = { perGramINR, ts: Date.now(), isLive: true };
         renderAll(true);
@@ -468,7 +477,7 @@
       const dot  = pill.querySelector('.dot');
       pill.className = 'live-pill ' + (isLive ? 'live' : 'cached');
       dot.className  = 'dot' + (isLive ? ' pulse' : '');
-      document.getElementById('pillText').textContent = isLive ? 'IBJA Live' : 'Cached';
+      document.getElementById('pillText').textContent = isLive ? 'Live' : 'Cached';
 
       // Widget badge
       const badge = document.getElementById('widgetBadge');
