@@ -2,7 +2,7 @@
   "name": "Gold Rate India",
   "short_name": "Gold Rate",
   "description": "Live 24K/22K gold and silver prices in India",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "start_url": "/goldticker/",
   "scope": "/goldticker/",
   "display": "standalone",
