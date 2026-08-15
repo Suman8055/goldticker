@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Gold Rate" />
   <meta name="theme-color" content="#0e0a02" />
-  <title>Gold Rate India</title>
+  <title>Gold &amp; Silver Rate India</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
@@ -19,6 +19,9 @@
       --gold: #f5c842;
       --gold-light: #ffe680;
       --gold-dark: #c8951a;
+      --silver: #c8d2dc;
+      --silver-light: #eef2f6;
+      --silver-dark: #8b96a3;
       --bg: #0e0a02;
       --card: #1c1507;
       --card2: #221b08;
@@ -124,8 +127,31 @@
     .install-banner-text { font-size: 12px; color: var(--muted); line-height: 1.5; }
     .install-banner-text b { color: var(--text); }
 
+    /* ── Metal switcher ── */
+    .metal-wrap { text-align: center; padding: 16px 20px 0; }
+    .metal-tabs {
+      display: inline-flex; background: var(--card);
+      border-radius: 22px; padding: 3px; border: 1px solid var(--border);
+    }
+    .metal-tab {
+      padding: 7px 26px; border-radius: 18px;
+      font-size: 13px; font-weight: 700; color: var(--muted);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .metal-tab.active.metal-gold {
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      color: #1a1008;
+      box-shadow: 0 2px 8px rgba(245,200,66,0.3);
+    }
+    .metal-tab.active.metal-silver {
+      background: linear-gradient(135deg, var(--silver-dark), var(--silver));
+      color: #14181c;
+      box-shadow: 0 2px 8px rgba(200,210,220,0.25);
+    }
+
     /* ── Purity tabs ── */
     .purity-wrap { text-align: center; padding: 14px 20px 8px; }
+    .purity-wrap.hidden { display: none; }
     .purity-tabs {
       display: inline-flex; background: var(--card);
       border-radius: 22px; padding: 3px; border: 1px solid var(--border);
@@ -140,6 +166,28 @@
       color: #1a1008;
       box-shadow: 0 2px 8px rgba(245,200,66,0.3);
     }
+
+    /* ── Silver accent overrides (applied via body.metal-silver) ── */
+    body.metal-silver .main-price,
+    body.metal-silver .pc-value,
+    body.metal-silver .wp-value,
+    body.metal-silver .rate-row-price { color: var(--silver-light); }
+    body.metal-silver .main-price .cur { color: var(--silver); }
+    body.metal-silver .price-card.highlight {
+      background: linear-gradient(145deg, #1e232a, #171b20);
+      border-color: rgba(200,210,220,0.25);
+    }
+    body.metal-silver .widget-card {
+      background: linear-gradient(135deg, #1a1f25, #12161a);
+      border-color: rgba(200,210,220,0.2);
+    }
+    body.metal-silver .widget-card::after {
+      background: linear-gradient(135deg, transparent 60%, rgba(200,210,220,0.05));
+    }
+    body.metal-silver .progress-bar { background: linear-gradient(90deg, var(--silver-dark), var(--silver)); }
+    body.metal-silver .widget-countdown { color: var(--silver); }
+    body.metal-silver .live-pill.live { background: rgba(200,210,220,0.15); color: var(--silver-light); }
+    body.metal-silver .widget-badge { background: rgba(200,210,220,0.15); color: var(--silver-light); }
 
     /* ── Main hero card (10g) ── */
     .main-card {
@@ -275,9 +323,9 @@
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <div class="gold-icon">⚜️</div>
+      <div class="gold-icon" id="headerIcon">⚜️</div>
       <div>
-        <div class="header-title">Gold Rate India</div>
+        <div class="header-title" id="headerTitle">Gold Rate India</div>
         <div class="header-sub" id="headerSub">Live Rate · 24 Karat · INR</div>
       </div>
     </div>
@@ -302,8 +350,16 @@
       <div class="install-banner-text">Tap <b>Share ⬆</b> → <b>Add to Home Screen</b> for app-like access with auto-refresh.</div>
     </div>
 
-    <!-- Purity switch -->
-    <div class="purity-wrap">
+    <!-- Metal switch -->
+    <div class="metal-wrap">
+      <div class="metal-tabs">
+        <div class="metal-tab active metal-gold" id="tabGold" onclick="switchMetal('gold')">🥇 Gold</div>
+        <div class="metal-tab metal-silver" id="tabSilver" onclick="switchMetal('silver')">🥈 Silver</div>
+      </div>
+    </div>
+
+    <!-- Purity switch (gold only — MCX silver is a single .999 fine contract) -->
+    <div class="purity-wrap" id="purityWrap">
       <div class="purity-tabs">
         <div class="purity-tab active" id="tab24k" onclick="switchPurity('24k')">24K (999)</div>
         <div class="purity-tab" id="tab22k" onclick="switchPurity('22k')">22K (916)</div>
@@ -312,7 +368,7 @@
 
     <!-- Hero: 10g price -->
     <div class="main-card">
-      <div class="main-card-label">10 Grams · 24K Gold</div>
+      <div class="main-card-label" id="mainCardLabel">10 Grams · 24K Gold</div>
       <div class="main-price"><span class="cur">₹</span><span id="hero10g">—</span></div>
       <div class="per-gram" id="heroPerGram">per gram: ₹—</div>
       <div class="live-pill loading" id="livePill">
@@ -327,13 +383,13 @@
         <div class="pc-icon">📦</div>
         <div class="pc-label">100 Grams</div>
         <div class="pc-value" id="card100g">₹—</div>
-        <div class="pc-sub">24K Pure Gold</div>
+        <div class="pc-sub" id="card100gSub">24K Pure Gold</div>
       </div>
       <div class="price-card">
         <div class="pc-icon">⚖️</div>
         <div class="pc-label">1 Gram</div>
         <div class="pc-value" id="card1g">₹—</div>
-        <div class="pc-sub">24K Pure Gold</div>
+        <div class="pc-sub" id="card1gSub">24K Pure Gold</div>
       </div>
     </div>
 
@@ -346,19 +402,19 @@
     </div>
     <div class="widget-card">
       <div class="widget-row">
-        <div class="widget-label">Gold Rate · India</div>
+        <div class="widget-label" id="widgetLabel">Gold Rate · India</div>
         <div class="widget-badge" id="widgetBadge">● LIVE</div>
       </div>
       <div class="widget-prices">
         <div class="widget-price-block">
           <div class="wp-label">10 Grams</div>
           <div class="wp-value" id="w10g">₹—</div>
-          <div class="wp-sub">24K · 999</div>
+          <div class="wp-sub" id="w10gSub">24K · 999</div>
         </div>
         <div class="widget-price-block">
           <div class="wp-label">100 Grams</div>
           <div class="wp-value" id="w100g">₹—</div>
-          <div class="wp-sub">24K · 999</div>
+          <div class="wp-sub" id="w100gSub">24K · 999</div>
         </div>
       </div>
       <div class="widget-divider"></div>
@@ -378,7 +434,7 @@
     </div>
     <div class="rates-table">
       <div class="rate-row">
-        <div><div class="rate-row-label">1 Gram</div><div class="rate-row-sub">24K 999 purity</div></div>
+        <div><div class="rate-row-label">1 Gram</div><div class="rate-row-sub" id="sub1g">24K 999 purity</div></div>
         <div class="rate-row-price" id="t1g">₹—</div>
       </div>
       <div class="rate-row">
@@ -402,7 +458,7 @@
     <!-- Info strip -->
     <div class="info-strip">
       <div class="info-icon">ℹ️</div>
-      <div class="info-text">Prices sourced from MCX (Multi Commodity Exchange of India) via Economic Times live feed — official Indian gold futures, updated intraday. Fallback: fawazahmed0/currency-api (daily). Excludes making charges and city-level variation.</div>
+      <div class="info-text" id="infoText">Prices sourced from MCX (Multi Commodity Exchange of India) via Economic Times live feed — official Indian gold futures, updated intraday. Fallback: fawazahmed0/currency-api (daily). Excludes making charges and city-level variation.</div>
     </div>
 
     <div class="footer" id="lastUpdated">Last updated: —</div>
@@ -416,12 +472,20 @@
     const TROY_OZ_G    = 31.1035;
     const INDIA_LEVY   = 1.1237;
     const MCX_BASE     = 'https://mcxlivefeeds.indiatimes.com/ET_MCX/mcxjson';
-    const XAU_API_1    = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json';
-    const XAU_API_2    = 'https://latest.currency-api.pages.dev/v1/currencies/xau.json';
+    const CURRENCY_API_1 = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies';
+    const CURRENCY_API_2 = 'https://latest.currency-api.pages.dev/v1/currencies';
     const PURITY_MULT  = { '24k': 1.0, '22k': 22 / 24 };
 
+    // Per-metal MCX contract config — silver quotes per KG, gold per 10G, so the
+    // JSONP payload needs a different divisor to reach a per-gram INR figure.
+    const METALS = {
+      gold:   { symbol: 'GOLD',   ccy: 'xau', unitDivisor: 10,   expiryDom: 5 },
+      silver: { symbol: 'SILVER', ccy: 'xag', unitDivisor: 1000, expiryDom: null }
+    };
+
+    let currentMetal   = 'gold';
     let currentPurity  = '24k';
-    let lastData       = null;   // { perGramINR, ts, isLive }
+    let dataByMetal     = { gold: null, silver: null }; // { perGramINR, ts, isLive, source }
     let nextRefreshAt  = 0;
     let countdownTimer = null;
 
@@ -432,27 +496,44 @@
     }
 
     // ── Cache (localStorage) ──────────────────────────────────────────────────
-    function saveCache(perGramINR) {
-      try { localStorage.setItem('gt_v2', JSON.stringify({ perGramINR, ts: Date.now() })); } catch (_) {}
+    function saveCache() {
+      try { localStorage.setItem('gt_v3', JSON.stringify({ gold: strip(dataByMetal.gold), silver: strip(dataByMetal.silver) })); } catch (_) {}
+      function strip(d) { return d ? { perGramINR: d.perGramINR, ts: d.ts, source: d.source } : null; }
     }
     function loadCache() {
-      try { const s = localStorage.getItem('gt_v2'); return s ? JSON.parse(s) : null; } catch (_) { return null; }
+      try {
+        const s = localStorage.getItem('gt_v3');
+        if (s) return JSON.parse(s);
+        const legacy = localStorage.getItem('gt_v2'); // pre-silver cache shape
+        if (legacy) { const g = JSON.parse(legacy); return { gold: g, silver: null }; }
+        return null;
+      } catch (_) { return null; }
+    }
+
+    // ── Nearest MCX expiry for a given metal's contract cadence ──────────────
+    function nearestExpiry(metal) {
+      const today = new Date();
+      const cfg = METALS[metal];
+      if (cfg.expiryDom) {
+        // Gold: contracts expire on a fixed day-of-month
+        let year = today.getFullYear();
+        let month = today.getMonth() + 1;
+        if (today.getDate() > cfg.expiryDom) { month++; if (month > 12) { month = 1; year++; } }
+        return `${year}-${String(month).padStart(2, '0')}-${String(cfg.expiryDom).padStart(2, '0')}`;
+      }
+      // Silver's expiry date doesn't follow gold's fixed day-of-month, so fall
+      // back to end-of-month and let the API's own ExpiryDatesNew list correct
+      // the guess on the actual fetch below.
+      const eom = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      return `${eom.getFullYear()}-${String(eom.getMonth() + 1).padStart(2, '0')}-${String(eom.getDate()).padStart(2, '0')}`;
     }
 
     // ── Tier 1: MCX live feed via Economic Times (CORS-open, intraday) ───────
-    async function fetchFromMCX() {
-      // Get nearest expiry — MCX GOLD contracts roll monthly
-      const today = new Date();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = '05'; // MCX GOLD expires on 5th of each month
-      let year = today.getFullYear();
-      let month = today.getMonth() + 1;
-      // If today is past the 5th, use next month
-      if (today.getDate() > 5) { month++; if (month > 12) { month = 1; year++; } }
-      const expiry = `${year}-${String(month).padStart(2, '0')}-${dd}`;
-
+    async function fetchFromMCX(metal) {
+      const cfg = METALS[metal];
+      const expiry = nearestExpiry(metal);
       const cb = 'gt' + Date.now();
-      const url = `${MCX_BASE}?callback=${cb}&symbol=GOLD&expiry=${expiry}&type=fando&language=&_=${Date.now()}`;
+      const url = `${MCX_BASE}?callback=${cb}&symbol=${cfg.symbol}&expiry=${expiry}&type=fando&language=&_=${Date.now()}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
       if (!res.ok) throw new Error('MCX HTTP ' + res.status);
       const text = await res.text();
@@ -460,12 +541,16 @@
       const json = text.replace(/^[^(]+\(/, '').replace(/\)\s*$/, '');
       const data = JSON.parse(json);
       const t = data.NewDataSet.Table;
-      const per10g = parseFloat(t.LastTradedPrice || t.BestSellPrice);
-      if (!per10g || per10g < 50000 || per10g > 1000000) throw new Error('Implausible MCX value: ' + per10g);
+      const raw = parseFloat(t.LastTradedPrice || t.BestSellPrice);
+      const perGramINR = raw / cfg.unitDivisor;
+      const plausible = metal === 'gold'
+        ? (perGramINR * 10 >= 50000 && perGramINR * 10 <= 1000000)
+        : (raw >= 30000 && raw <= 600000); // silver ₹/kg sanity band
+      if (!raw || !plausible) throw new Error('Implausible MCX value: ' + raw);
       return {
-        perGramINR: per10g / 10,
-        high: parseFloat(t.HighPrice) / 10,
-        low:  parseFloat(t.LowPrice)  / 10,
+        perGramINR,
+        high: parseFloat(t.HighPrice) / cfg.unitDivisor,
+        low:  parseFloat(t.LowPrice)  / cfg.unitDivisor,
         pct:  parseFloat(t.PercentChange),
         dt:   t.DateTime,
         source: 'MCX'
@@ -473,44 +558,47 @@
     }
 
     // ── Tier 2: fawazahmed0 currency-api (CORS-open, daily fallback) ─────────
-    async function fetchFromCurrencyAPI() {
-      let res = await fetch(XAU_API_1, { signal: AbortSignal.timeout(12000) }).catch(() => null);
-      if (!res || !res.ok) res = await fetch(XAU_API_2, { signal: AbortSignal.timeout(12000) });
+    async function fetchFromCurrencyAPI(metal) {
+      const ccy = METALS[metal].ccy;
+      let res = await fetch(`${CURRENCY_API_1}/${ccy}.json`, { signal: AbortSignal.timeout(12000) }).catch(() => null);
+      if (!res || !res.ok) res = await fetch(`${CURRENCY_API_2}/${ccy}.json`, { signal: AbortSignal.timeout(12000) });
       if (!res || !res.ok) throw new Error('Currency API unavailable');
       const data = await res.json();
-      const xauInr = data.xau && data.xau.inr;
-      if (!xauInr) throw new Error('INR rate missing');
-      const perGramINR = (xauInr / TROY_OZ_G) * INDIA_LEVY;
-      if (perGramINR < 5000 || perGramINR > 150000) throw new Error('Implausible value: ' + perGramINR);
+      const ccyInr = data[ccy] && data[ccy].inr;
+      if (!ccyInr) throw new Error('INR rate missing');
+      const perGramINR = (ccyInr / TROY_OZ_G) * INDIA_LEVY;
+      const plausible = metal === 'gold'
+        ? (perGramINR >= 5000 && perGramINR <= 150000)
+        : (perGramINR >= 50 && perGramINR <= 2000); // silver ₹/gram sanity band
+      if (!plausible) throw new Error('Implausible value: ' + perGramINR);
       return { perGramINR, high: null, low: null, pct: null, dt: null, source: 'currency-api' };
     }
 
     // ── Main fetch ────────────────────────────────────────────────────────────
     async function fetchGoldPrice() {
+      const metal = currentMetal;
       setLoading(true);
       hideError();
 
       try {
         let result;
         try {
-          result = await fetchFromMCX();
+          result = await fetchFromMCX(metal);
         } catch (_) {
-          result = await fetchFromCurrencyAPI();
+          result = await fetchFromCurrencyAPI(metal);
         }
-        saveCache(result.perGramINR);
-        lastData = { ...result, ts: Date.now(), isLive: true };
+        dataByMetal[metal] = { ...result, ts: Date.now(), isLive: true };
+        saveCache();
         renderAll(true);
         scheduleNextRefresh();
       } catch (err) {
         const cache = loadCache();
-        if (cache) {
-          lastData = { ...cache, isLive: false };
-          renderAll(false);
-          showError();
-        } else {
-          renderAll(false);
-          showError();
+        const cached = cache && cache[metal];
+        if (cached) {
+          dataByMetal[metal] = { ...cached, isLive: false };
         }
+        renderAll(false);
+        showError();
         scheduleNextRefresh();
       } finally {
         setLoading(false);
@@ -519,8 +607,12 @@
 
     // ── Render ────────────────────────────────────────────────────────────────
     function renderAll(isLive) {
+      const lastData = dataByMetal[currentMetal];
       if (!lastData?.perGramINR) return;
-      const pg = lastData.perGramINR * PURITY_MULT[currentPurity];
+      const isGold = currentMetal === 'gold';
+      const purityMult = isGold ? PURITY_MULT[currentPurity] : 1.0;
+      const pg = lastData.perGramINR * purityMult;
+      const label = isGold ? (currentPurity === '24k' ? '24K Gold' : '22K Gold') : 'Silver (999)';
 
       // Hero
       document.getElementById('hero10g').textContent    = fmt(pg * 10);
@@ -529,11 +621,16 @@
       // Grid cards
       document.getElementById('card100g').textContent = '₹' + fmt(pg * 100);
       document.getElementById('card1g').textContent   = '₹' + fmt(pg);
+      document.getElementById('card100gSub').textContent = isGold ? '24K Pure Gold' : 'Fine Silver';
+      document.getElementById('card1gSub').textContent   = isGold ? '24K Pure Gold' : 'Fine Silver';
 
-      // Widget (always shows 24K base)
-      const pg24 = lastData.perGramINR;
-      document.getElementById('w10g').textContent  = '₹' + fmt(pg24 * 10);
-      document.getElementById('w100g').textContent = '₹' + fmt(pg24 * 100);
+      // Widget (gold widget always shows 24K base; silver has no purity tiers)
+      const pgWidget = isGold ? lastData.perGramINR : pg;
+      document.getElementById('w10g').textContent  = '₹' + fmt(pgWidget * 10);
+      document.getElementById('w100g').textContent = '₹' + fmt(pgWidget * 100);
+      document.getElementById('w10gSub').textContent  = isGold ? '24K · 999' : '999 Fine';
+      document.getElementById('w100gSub').textContent = isGold ? '24K · 999' : '999 Fine';
+      document.getElementById('widgetLabel').textContent = (isGold ? 'Gold' : 'Silver') + ' Rate · India';
 
       // Table
       document.getElementById('t1g').textContent   = '₹' + fmt(pg);
@@ -541,6 +638,7 @@
       document.getElementById('t10g').textContent  = '₹' + fmt(pg * 10);
       document.getElementById('t100g').textContent = '₹' + fmt(pg * 100);
       document.getElementById('t1kg').textContent  = '₹' + fmt(pg * 1000);
+      document.getElementById('sub1g').textContent = isGold ? '24K 999 purity' : '999 fine purity';
 
       // Live pill
       const pill = document.getElementById('livePill');
@@ -554,6 +652,17 @@
       badge.className = 'widget-badge' + (isLive ? '' : ' stale');
       badge.textContent = isLive ? '● LIVE' : '◌ CACHED';
 
+      // Header + labels
+      document.getElementById('headerTitle').textContent = isGold ? 'Gold Rate India' : 'Silver Rate India';
+      document.getElementById('headerIcon').textContent  = isGold ? '⚜️' : '🥈';
+      document.getElementById('headerSub').textContent   = isGold
+        ? ('Live Rate · ' + (currentPurity === '24k' ? '24 Karat' : '22 Karat') + ' · INR')
+        : 'Live Rate · 999 Fine · INR';
+      document.getElementById('mainCardLabel').textContent = '10 Grams · ' + label;
+      document.getElementById('infoText').textContent = isGold
+        ? 'Prices sourced from MCX (Multi Commodity Exchange of India) via Economic Times live feed — official Indian gold futures, updated intraday. Fallback: fawazahmed0/currency-api (daily). Excludes making charges and city-level variation.'
+        : 'Prices sourced from MCX (Multi Commodity Exchange of India) via Economic Times live feed — official Indian silver futures, updated intraday. Fallback: fawazahmed0/currency-api (daily). Excludes making charges and city-level variation.';
+
       // Timestamps + source
       const t = new Date(lastData.ts);
       const timeStr = t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -562,16 +671,36 @@
       document.getElementById('dataSource').textContent = lastData.source || 'MCX';
     }
 
+    // ── Metal switch ──────────────────────────────────────────────────────────
+    function switchMetal(m) {
+      if (m === currentMetal) return;
+      currentMetal = m;
+      document.getElementById('tabGold').classList.toggle('active', m === 'gold');
+      document.getElementById('tabSilver').classList.toggle('active', m === 'silver');
+      document.getElementById('purityWrap').classList.toggle('hidden', m === 'silver');
+      document.body.classList.toggle('metal-silver', m === 'silver');
+
+      const cached = dataByMetal[m];
+      if (cached) {
+        renderAll(cached.isLive);
+      } else {
+        // Show whatever's in localStorage immediately, then fetch fresh
+        const cache = loadCache();
+        if (cache && cache[m]) {
+          dataByMetal[m] = { ...cache[m], isLive: false };
+          renderAll(false);
+        }
+      }
+      fetchGoldPrice();
+    }
+
     // ── Purity switch ─────────────────────────────────────────────────────────
     function switchPurity(p) {
       currentPurity = p;
       document.getElementById('tab24k').classList.toggle('active', p === '24k');
       document.getElementById('tab22k').classList.toggle('active', p === '22k');
 
-      // Update purity label on hero card
-      document.querySelector('.main-card-label').textContent =
-        (p === '24k' ? '10 Grams · 24K Gold' : '10 Grams · 22K Gold');
-
+      const lastData = dataByMetal[currentMetal];
       if (lastData) renderAll(lastData.isLive);
     }
 
@@ -707,8 +836,8 @@
 
     // Show cached price immediately while fetching
     const cached = loadCache();
-    if (cached) {
-      lastData = { ...cached, isLive: false };
+    if (cached && cached[currentMetal]) {
+      dataByMetal[currentMetal] = { ...cached[currentMetal], isLive: false };
       renderAll(false);
     }
 
