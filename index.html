@@ -493,7 +493,7 @@
     </div>
 
     <div class="footer" id="lastUpdated">Last updated: —</div>
-    <div class="footer" id="appVersion">v1.2.0</div>
+    <div class="footer" id="appVersion">v1.2.1</div>
 
   </div><!-- end scroll-body -->
 
@@ -513,8 +513,12 @@
     // Per-metal MCX contract config — silver quotes per KG, gold per 10G, so the
     // JSONP payload needs a different divisor to reach a per-gram INR figure.
     const METALS = {
-      gold:   { symbol: 'GOLD',   ccy: 'xau', unitDivisor: 10,   expiryDom: 5 },
-      silver: { symbol: 'SILVER', ccy: 'xag', unitDivisor: 1000, expiryDom: null }
+      // retailLevy: MCX futures price vs Indian retail/bullion price. Gold's MCX
+      // price already tracks retail closely (levy 1.0, no-op). Silver's MCX price
+      // runs meaningfully below retail — physical delivery + dealer premium isn't
+      // priced into the futures contract — so 1.0581 (~5.8%) closes that gap.
+      gold:   { symbol: 'GOLD',   ccy: 'xau', unitDivisor: 10,   expiryDom: 5,    retailLevy: 1.0 },
+      silver: { symbol: 'SILVER', ccy: 'xag', unitDivisor: 1000, expiryDom: null, retailLevy: 1.0581 }
     };
 
     let currentMetal   = 'gold';
@@ -598,7 +602,7 @@
       const data = JSON.parse(json);
       const t = data.NewDataSet.Table;
       const raw = parseFloat(t.LastTradedPrice || t.BestSellPrice);
-      const perGramINR = raw / cfg.unitDivisor;
+      const perGramINR = (raw / cfg.unitDivisor) * cfg.retailLevy;
       const plausible = metal === 'gold'
         ? (perGramINR * 10 >= 50000 && perGramINR * 10 <= 1000000)
         : (raw >= 30000 && raw <= 600000); // silver ₹/kg sanity band
@@ -622,7 +626,7 @@
       const data = await res.json();
       const ccyInr = data[ccy] && data[ccy].inr;
       if (!ccyInr) throw new Error('INR rate missing');
-      const perGramINR = (ccyInr / TROY_OZ_G) * INDIA_LEVY;
+      const perGramINR = (ccyInr / TROY_OZ_G) * INDIA_LEVY * METALS[metal].retailLevy;
       const plausible = metal === 'gold'
         ? (perGramINR >= 5000 && perGramINR <= 150000)
         : (perGramINR >= 50 && perGramINR <= 2000); // silver ₹/gram sanity band
