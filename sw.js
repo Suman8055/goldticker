@@ -1,5 +1,5 @@
 // Service Worker — GoldTicker
-const CACHE = 'goldticker-v2';
+const CACHE = 'goldticker-v3';
 const SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
