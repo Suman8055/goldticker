@@ -211,6 +211,29 @@
     .main-price .cur { font-size: 24px; font-weight: 600; color: var(--gold); vertical-align: super; margin-right: 1px; }
     .per-gram { font-size: 14px; color: var(--muted); margin-top: 5px; }
 
+    /* ── Sparkline ── */
+    .sparkline-wrap { margin-top: 10px; height: 36px; }
+    .sparkline-wrap svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .sparkline-wrap polyline { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+    .sparkline-wrap.trend-up polyline { stroke: var(--green); }
+    .sparkline-wrap.trend-down polyline { stroke: var(--red); }
+    .sparkline-wrap.trend-flat polyline { stroke: var(--muted); }
+
+    /* ── Price movement (pct change) ── */
+    .price-move { font-size: 13px; font-weight: 700; margin-top: 5px; display: inline-flex; align-items: center; gap: 4px; }
+    .price-move.up   { color: var(--green); }
+    .price-move.down { color: var(--red); }
+    .price-move.flat { color: var(--muted); }
+    .widget-move { font-size: 10px; font-weight: 700; }
+    .widget-move.up   { color: var(--green); }
+    .widget-move.down { color: var(--red); }
+    .widget-move.flat { color: var(--muted); }
+
+    /* ── Live-update flash on the hero number ── */
+    .main-price #hero10g { transition: color 0.7s ease, background-color 0.7s ease; border-radius: 6px; }
+    .main-price #hero10g.flash-up   { color: var(--green); background-color: rgba(76,175,128,0.15); }
+    .main-price #hero10g.flash-down { color: var(--red);   background-color: rgba(224,85,85,0.15); }
+
     .live-pill {
       display: inline-flex; align-items: center; gap: 5px;
       padding: 4px 10px; border-radius: 12px;
@@ -372,6 +395,12 @@
       <div class="main-card-label" id="mainCardLabel">10 Grams · 24K Gold</div>
       <div class="main-price"><span class="cur">₹</span><span id="hero10g">—</span></div>
       <div class="per-gram" id="heroPerGram">per gram: ₹—</div>
+      <div class="price-move flat" id="heroMove"></div>
+      <div class="sparkline-wrap trend-flat" id="sparkWrap">
+        <svg id="sparkSvg" viewBox="0 0 100 36" preserveAspectRatio="none">
+          <polyline id="sparkLine" points=""></polyline>
+        </svg>
+      </div>
       <div class="live-pill loading" id="livePill">
         <span class="dot pulse"></span>
         <span id="pillText">Fetching…</span>
@@ -421,6 +450,7 @@
       <div class="widget-divider"></div>
       <div class="widget-meta">
         <div class="widget-time" id="widgetTime">—</div>
+        <div class="widget-move flat" id="widgetMove"></div>
         <div class="widget-countdown" id="widgetCountdown"></div>
         <div class="widget-source" id="dataSource">MCX</div>
       </div>
@@ -463,7 +493,7 @@
     </div>
 
     <div class="footer" id="lastUpdated">Last updated: —</div>
-    <div class="footer" id="appVersion">v1.1.0</div>
+    <div class="footer" id="appVersion">v1.2.0</div>
 
   </div><!-- end scroll-body -->
 
@@ -477,6 +507,8 @@
     const CURRENCY_API_1 = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies';
     const CURRENCY_API_2 = 'https://latest.currency-api.pages.dev/v1/currencies';
     const PURITY_MULT  = { '24k': 1.0, '22k': 22 / 24 };
+    const SPARK_KEY    = 'gt_sparkline_v1';
+    const SPARK_MAX    = 24; // ~6h of history at the 15-min auto-refresh cadence — enough to show intraday trend, not a full chart
 
     // Per-metal MCX contract config — silver quotes per KG, gold per 10G, so the
     // JSONP payload needs a different divisor to reach a per-gram INR figure.
@@ -490,6 +522,8 @@
     let dataByMetal     = { gold: null, silver: null }; // { perGramINR, ts, isLive, source }
     let nextRefreshAt  = 0;
     let countdownTimer = null;
+    let sparklineByMetal = { gold: [], silver: [] }; // [{ price, ts }] — points are per-gram 24K/999 base, purity-scaled at render time
+    let lastShownPrice   = {}; // keyed 'metal:purity' → last shown 10g value; drives the flash-on-change effect
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function fmt(n) {
@@ -510,6 +544,26 @@
         if (legacy) { const g = JSON.parse(legacy); return { gold: g, silver: null }; }
         return null;
       } catch (_) { return null; }
+    }
+
+    // ── Sparkline history (localStorage, kept separate from gt_v3 so this
+    // purely-additive feature never needs a cache-version migration) ─────────
+    function loadSparklineData() {
+      try {
+        const s = localStorage.getItem(SPARK_KEY);
+        if (!s) return { gold: [], silver: [] };
+        const parsed = JSON.parse(s);
+        return { gold: Array.isArray(parsed.gold) ? parsed.gold : [], silver: Array.isArray(parsed.silver) ? parsed.silver : [] };
+      } catch (_) { return { gold: [], silver: [] }; }
+    }
+    function saveSparklineData() {
+      try { localStorage.setItem(SPARK_KEY, JSON.stringify(sparklineByMetal)); } catch (_) {}
+    }
+    function recordSparklinePoint(metal, perGramINR) {
+      const points = sparklineByMetal[metal];
+      points.push({ price: perGramINR, ts: Date.now() });
+      if (points.length > SPARK_MAX) points.splice(0, points.length - SPARK_MAX);
+      saveSparklineData();
     }
 
     // ── Nearest MCX expiry for a given metal's contract cadence ──────────────
@@ -591,6 +645,7 @@
         }
         dataByMetal[metal] = { ...result, ts: Date.now(), isLive: true };
         saveCache();
+        recordSparklinePoint(metal, result.perGramINR);
         renderAll(true);
         scheduleNextRefresh();
       } catch (err) {
@@ -617,8 +672,16 @@
       const label = isGold ? (currentPurity === '24k' ? '24K Gold' : '22K Gold') : 'Silver (999)';
 
       // Hero
-      document.getElementById('hero10g').textContent    = fmt(pg * 10);
+      const hero10gEl = document.getElementById('hero10g');
+      const newHeroVal = pg * 10;
+      // Keyed by metal+purity, not metal alone, so switching 24K/22K (a pure
+      // re-render, not a new fetch) never triggers a false flash
+      flashOnChange(hero10gEl, currentMetal + ':' + (isGold ? currentPurity : '999'), newHeroVal);
+      hero10gEl.textContent = fmt(newHeroVal);
       document.getElementById('heroPerGram').textContent = 'per gram: ₹' + fmt(pg);
+
+      renderMovement(lastData.pct);
+      renderSparkline(currentMetal, purityMult);
 
       // Grid cards
       document.getElementById('card100g').textContent = '₹' + fmt(pg * 100);
@@ -671,6 +734,68 @@
       document.getElementById('widgetTime').textContent = timeStr + ' IST';
       document.getElementById('lastUpdated').textContent = 'Last updated: ' + timeStr + ' IST' + (isLive ? '' : ' (cached)');
       document.getElementById('dataSource').textContent = lastData.source || 'MCX';
+    }
+
+    // ── Live-update flash: brief color pulse when the hero number actually
+    // changes value, so a refresh feels alive instead of an instant swap ──────
+    let flashTimer = null;
+    function flashOnChange(el, metal, newVal) {
+      const prevVal = lastShownPrice[metal];
+      if (prevVal != null && Math.round(prevVal) !== Math.round(newVal)) {
+        const cls = newVal > prevVal ? 'flash-up' : 'flash-down';
+        el.classList.remove('flash-up', 'flash-down');
+        void el.offsetWidth; // restart the CSS transition if a flash is already mid-fade
+        el.classList.add(cls);
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => el.classList.remove('flash-up', 'flash-down'), 700);
+      }
+      lastShownPrice[metal] = newVal;
+    }
+
+    // ── Movement (pct change) — arrow + color, mirrored in hero + widget ─────
+    function renderMovement(pct) {
+      const heroEl = document.getElementById('heroMove');
+      const widgetEl = document.getElementById('widgetMove');
+      if (pct === null || pct === undefined || isNaN(pct)) {
+        heroEl.textContent = '';
+        heroEl.className = 'price-move flat';
+        widgetEl.textContent = '';
+        widgetEl.className = 'widget-move flat';
+        return;
+      }
+      const dir = pct > 0.01 ? 'up' : pct < -0.01 ? 'down' : 'flat';
+      const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '—';
+      const text = arrow + ' ' + (pct > 0 ? '+' : '') + pct.toFixed(2) + '%';
+      heroEl.textContent = text;
+      heroEl.className = 'price-move ' + dir;
+      widgetEl.textContent = text;
+      widgetEl.className = 'widget-move ' + dir;
+    }
+
+    // ── Sparkline — hand-rolled SVG polyline (no chart library, no canvas:
+    // SVG scales crisper at small sizes and needs no redraw-on-resize logic) ──
+    function renderSparkline(metal, purityMult) {
+      const wrap = document.getElementById('sparkWrap');
+      const line = document.getElementById('sparkLine');
+      const points = sparklineByMetal[metal] || [];
+      if (points.length < 2) {
+        line.setAttribute('points', '');
+        wrap.className = 'sparkline-wrap trend-flat';
+        return;
+      }
+      const vals = points.map(p => p.price * purityMult);
+      const min = Math.min(...vals), max = Math.max(...vals);
+      const range = max - min || 1;
+      const w = 100, h = 36, pad = 3;
+      const coords = vals.map((v, i) => {
+        const x = (i / (vals.length - 1)) * w;
+        const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+        return x.toFixed(2) + ',' + y.toFixed(2);
+      });
+      line.setAttribute('points', coords.join(' '));
+      const first = vals[0], last = vals[vals.length - 1];
+      const trend = last > first ? 'trend-up' : last < first ? 'trend-down' : 'trend-flat';
+      wrap.className = 'sparkline-wrap ' + trend;
     }
 
     // ── Metal switch ──────────────────────────────────────────────────────────
@@ -835,6 +960,7 @@
 
     // ── Init ──────────────────────────────────────────────────────────────────
     checkInstall();
+    sparklineByMetal = loadSparklineData();
 
     // Show cached price immediately while fetching
     const cached = loadCache();
